@@ -1,0 +1,23 @@
+budget:
+  work_days_per_month: 22
+  exhaustion_threshold: 0.05
+  rounding_decimals: 2
+
+downgrade:
+  enabled: true
+  path: [高级, 中级, 初级]
+  consume_target_level: true
+
+domain:
+  strict: true
+  overrides: {}
+
+scoring:
+  continuity_bonus: 1000
+  urgency_bonus: 500
+  urgency_months: 3
+  duration_weight: 10
+
+warnings:
+  order_budget_months: 2
+  domain_warning_months: 2

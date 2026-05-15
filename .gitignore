@@ -1,0 +1,20 @@
+# 生成的输出文件
+data/output/
+logs/
+
+# Excel 临时文件
+~$*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

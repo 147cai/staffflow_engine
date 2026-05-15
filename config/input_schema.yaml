@@ -1,0 +1,81 @@
+# 输入Excel的Sheet名与列名映射（Sheet/列名变动时只改此文件，不改代码）
+# 订单清单 — 双行合并表头，第2行的子标题覆盖第1行
+orders:
+  name: 订单清单
+  header_rows: 2        # 前2行合并为列名（row2非空时优先）
+  data_start_row: 3
+  columns:
+    order_no: 编号
+    name: 订单名称
+    senior_budget: 高级
+    mid_budget: 中级
+    junior_budget: 初级
+    start_date: 订单开始日期
+    end_date: 订单结束日期
+    status: 订单状态
+    domain: 领域标注
+
+# 订单当前工作量 — 第1列无标题（订单号），其余按列名匹配
+workload:
+  name: 订单当前工作量
+  header_rows: 1
+  data_start_row: 2
+  col_order_no: 0       # 订单号在第0列（无表头，用索引）
+  columns:
+    level: 人员资质
+    consumed: 有效在岗人月
+
+# 当前在岗人员清单
+staff_pool:
+  name: 当前在岗人员清单
+  header_rows: 1
+  data_start_row: 2
+  columns:
+    domain: 领域标注
+    name: 姓名
+
+# 当前订单人员清单
+initial_assignments:
+  name: 当前订单人员清单
+  header_rows: 1
+  data_start_row: 2
+  columns:
+    order_no: 订单编号
+    name: 姓名
+    level: 人员资质
+    entry_date: 进场时间
+    exit_date: 退场时间
+
+# 遴选清单 — 自动扫描所有以此前缀开头的Sheet
+whitelist:
+  prefix: 遴选清单
+  header_rows: 1
+  data_start_row: 2
+  columns:
+    name: 姓名
+    level: 进场资质
+
+# 跨领域借还配置（可选）— 所有文本字段自动strip
+borrow_config:
+  name: 跨领域借还配置
+  optional: true
+  header_rows: 1
+  data_start_row: 2
+  columns:
+    name: 姓名
+    from_domain: 借出方领域
+    to_order: 借入方订单
+    month: 发生月份
+    days: 借用天数
+
+# 级别字符串规范化映射（Excel中的原始值 → 内部统一值）
+level_map:
+  高级开发工程师: 高级
+  中级开发工程师: 中级
+  初级开发工程师: 初级
+  高级: 高级
+  中级: 中级
+  初级: 初级
+  高级工程师: 高级
+  中级工程师: 中级
+  初级工程师: 初级
