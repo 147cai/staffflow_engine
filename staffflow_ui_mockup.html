@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>StaffFlow 排班工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600&family=Noto+Serif+SC:wght@600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --navy:#1a3a5c;--navy-dk:#0f2540;--navy-md:#1e4a73;
+  --accent:#1d6fb8;--accent-h:#1557a0;
+  --ok:#1e7e4e;--ok-bg:#edf7f2;--ok-bd:#a7d7be;
+  --warn:#c05200;--warn-bg:#fff4ec;--warn-bd:#ffd8b5;
+  --bg:#eef1f5;--card:#fff;--bd:#dde3ec;--bd-lt:#edf0f5;
+  --t1:#1a2535;--t2:#4a5568;--t3:#8492a6;
+  --sans:'Noto Sans SC',sans-serif;
+  --serif:'Noto Serif SC',serif;
+  --mono:'JetBrains Mono',monospace
+}
+
+html,body{width:1000px;height:700px;overflow:hidden;font-family:var(--sans);
+  background:var(--bg);color:var(--t1);font-size:13px;line-height:1.5}
+
+.app{width:1000px;height:700px;display:flex;flex-direction:column}
+
+/* ── HEADER ── */
+.hd{
+  height:56px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--navy-dk) 0%,var(--navy) 55%,var(--navy-md) 100%);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;position:relative;overflow:hidden
+}
+.hd::after{
+  content:'';position:absolute;right:-30px;top:-40px;
+  width:220px;height:220px;
+  background:radial-gradient(circle,rgba(255,255,255,.05) 0%,transparent 65%);
+  pointer-events:none
+}
+.hd-brand{display:flex;align-items:center;gap:10px}
+.hd-title{font-family:var(--serif);font-size:17px;color:#fff;font-weight:600;letter-spacing:.02em}
+.hd-pipe{width:1px;height:14px;background:rgba(255,255,255,.22);flex-shrink:0}
+.hd-sub{font-size:12px;color:rgba(255,255,255,.55);font-weight:300;letter-spacing:.03em}
+.hd-ver{
+  font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.42);
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+  padding:3px 10px;border-radius:4px;letter-spacing:.06em
+}
+
+/* ── BODY ── */
+.body{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── TOP: OPERATION ── */
+.top{flex-shrink:0;padding:16px 22px 14px;background:var(--bg)}
+.op-card{
+  background:var(--card);border:1px solid var(--bd);border-radius:10px;
+  padding:16px 18px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.04)
+}
+
+.file-row{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;margin-bottom:12px}
+.field-lbl{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:5px;
+  letter-spacing:.02em;display:flex;align-items:center;gap:4px}
+.req{color:var(--accent);font-size:14px;line-height:1}
+.fi-wrap{display:flex;gap:6px}
+.fi-path{
+  flex:1;height:32px;border:1px solid var(--bd);border-radius:6px;
+  padding:0 10px;font-size:12px;font-family:var(--mono);color:var(--t1);
+  background:#fafbfc;outline:none;transition:border-color .15s;min-width:0
+}
+.fi-path:focus{border-color:var(--accent);background:#fff}
+.fi-path::placeholder{font-family:var(--sans);color:var(--t3);font-size:12px}
+.btn-brs{
+  height:32px;padding:0 11px;border:1px solid var(--bd);border-radius:6px;
+  background:#f7f9fc;color:var(--t2);font-size:12px;font-family:var(--sans);
+  cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;
+  transition:all .15s
+}
+.btn-brs:hover{background:#eff2f8;border-color:#bfcad8}
+
+.gen-area{display:flex;flex-direction:column;gap:8px}
+.btn-gen{
+  width:100%;height:40px;
+  background:linear-gradient(135deg,#1a3a5c 0%,#1d6fb8 100%);
+  color:#fff;border:none;border-radius:8px;
+  font-size:14px;font-weight:600;font-family:var(--sans);
+  cursor:pointer;letter-spacing:.04em;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 2px 8px rgba(26,58,92,.25);transition:all .2s
+}
+.btn-gen:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(26,58,92,.35)}
+.btn-gen:active{transform:translateY(0)}
+.btn-gen.running{background:linear-gradient(135deg,#1557a0,#1d6fb8);cursor:not-allowed}
+.btn-gen.done{background:linear-gradient(135deg,#1a5c3a,#1e7e4e)}
+
+.status-area{min-height:34px;display:flex;align-items:center}
+.s-idle{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:12px}
+.s-idle.hide{display:none}
+.s-run{display:none;width:100%}
+.s-run.on{display:block}
+.prog-wrap{height:4px;background:var(--bd-lt);border-radius:2px;overflow:hidden;margin-bottom:5px}
+.prog-fill{
+  height:100%;border-radius:2px;width:0%;
+  background:linear-gradient(90deg,var(--accent),#5bb3f0);
+  transition:width .3s ease
+}
+.prog-log{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.s-ok{
+  display:none;align-items:center;gap:8px;width:100%;
+  background:var(--ok-bg);border:1px solid var(--ok-bd);
+  border-radius:6px;padding:6px 12px;font-size:12.5px;color:var(--ok)
+}
+.s-ok.on{display:flex}
+.ok-icon{
+  width:16px;height:16px;background:var(--ok);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:10px;flex-shrink:0
+}
+.s-ok .fname{font-family:var(--mono);font-size:11px;color:var(--accent);cursor:pointer}
+.s-ok .ts{color:var(--t3);margin-left:auto;font-size:11px}
+
+/* ── DIVIDER ── */
+.div{height:1px;background:var(--bd);margin:0 22px;flex-shrink:0}
+
+/* ── BOTTOM: CONFIG ── */
+.cfg{flex:1;padding:12px 22px 14px;display:flex;flex-direction:column;overflow:hidden}
+.cfg-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-shrink:0}
+.cfg-title{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.cfg-line{flex:1;height:1px;background:var(--bd)}
+
+.tabs{
+  flex:1;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--card);border:1px solid var(--bd);border-radius:10px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05)
+}
+.tab-hds{display:flex;border-bottom:1px solid var(--bd);flex-shrink:0}
+.tab-btn{
+  padding:8px 16px;font-size:12.5px;font-family:var(--sans);font-weight:500;
+  color:var(--t3);border:none;background:transparent;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all .15s;display:flex;align-items:center;gap:5px
+}
+.tab-btn:hover{color:var(--t2)}
+.tab-btn.on{color:var(--navy);border-bottom-color:var(--accent);font-weight:600}
+.badge{
+  font-size:10px;padding:1px 6px;border-radius:3px;
+  background:#fff3e0;color:var(--warn);font-weight:600
+}
+
+.tab-panels{flex:1;overflow:hidden;position:relative}
+.tab-pnl{display:none;height:100%;padding:12px 16px;overflow-y:auto;flex-direction:column;gap:10px}
+.tab-pnl.on{display:flex}
+
+.hint{
+  font-size:11.5px;color:var(--t3);flex-shrink:0;
+  background:#f7f9fc;border:1px solid var(--bd-lt);border-radius:5px;
+  padding:6px 10px;display:flex;align-items:center;gap:6px
+}
+.hint.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+.hi{color:var(--accent);font-style:normal;flex-shrink:0}
+.hi.w{color:var(--warn)}
+
+.cfg-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px}
+.cfg-field{display:flex;flex-direction:column;gap:4px}
+.cfg-field label{font-size:11.5px;font-weight:600;color:var(--t2);letter-spacing:.02em}
+.cfg-in{
+  height:30px;border:1px solid var(--bd);border-radius:5px;
+  padding:0 9px;font-size:12.5px;font-family:var(--mono);color:var(--t1);
+  background:#fafbfc;outline:none;transition:border-color .15s
+}
+.cfg-in:focus{border-color:var(--accent);background:#fff}
+.cfg-in::placeholder{font-family:var(--sans);color:var(--t3);font-size:12px}
+.fhint{font-size:10.5px;color:var(--t3);font-style:italic;margin-top:2px}
+
+.cfg-acts{display:flex;align-items:center;gap:8px;margin-top:2px}
+.btn-save{
+  height:28px;padding:0 14px;background:var(--navy);color:#fff;
+  border:none;border-radius:5px;font-size:12px;font-weight:600;
+  font-family:var(--sans);cursor:pointer;transition:background .15s;letter-spacing:.02em
+}
+.btn-save:hover{background:var(--navy-md)}
+.sv-ok{font-size:12px;color:var(--ok);display:none;align-items:center;gap:4px}
+.sv-ok.on{display:flex}
+
+/* YAML panel */
+.yaml-wrap{flex:1;display:flex;flex-direction:column;gap:6px;overflow:hidden;min-height:0}
+.yaml-ta{
+  flex:1;border:1px solid var(--bd);border-radius:6px;padding:9px 11px;
+  font-size:11px;font-family:var(--mono);color:var(--t2);
+  background:#fafbfc;resize:none;outline:none;line-height:1.65;min-height:0
+}
+.yaml-ta:focus{border-color:var(--accent);background:#fff}
+.yaml-ta[readonly]{background:#f5f7fa;cursor:default}
+.yaml-acts{display:flex;gap:6px;flex-shrink:0}
+.btn-edit{
+  height:27px;padding:0 11px;border:1px solid var(--bd);border-radius:5px;
+  background:#f5f7fa;color:var(--t2);font-size:11.5px;font-family:var(--sans);cursor:pointer
+}
+.btn-edit:hover{background:#eff2f8}
+.btn-syaml{
+  height:27px;padding:0 11px;border:none;border-radius:5px;
+  background:var(--navy);color:#fff;font-size:11.5px;font-family:var(--sans);
+  cursor:pointer;display:none
+}
+.btn-syaml.on{display:block}
+
+.s-err{
+  display:none;align-items:center;gap:8px;width:100%;
+  background:#fff1f0;border:1px solid #ffb8b8;
+  border-radius:6px;padding:6px 12px;font-size:12.5px;color:#b91c1c
+}
+.s-err.on{display:flex}
+.err-icon{
+  width:16px;height:16px;background:#b91c1c;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:11px;font-weight:700;flex-shrink:0
+}
+
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* ── CALENDAR GUIDE ── */
+.cal-guide{
+  flex-shrink:0;
+  background:#f4f7fb;border:1px solid #d8e3f0;border-radius:7px;
+  padding:9px 12px;display:flex;flex-direction:column;gap:6px
+}
+.cg-title{
+  font-size:11px;font-weight:700;color:var(--t2);
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:1px
+}
+.cg-rows{display:flex;flex-direction:column;gap:4px}
+.cg-row{display:flex;align-items:baseline;gap:6px;line-height:1.45}
+.cg-key{
+  font-family:var(--mono);font-size:11px;color:#1a5c9e;
+  background:#ddeaf8;border-radius:3px;padding:1px 6px;
+  white-space:nowrap;flex-shrink:0
+}
+.cg-sep{color:var(--t3);font-size:11px;flex-shrink:0}
+.cg-val{font-size:11.5px;color:var(--t2)}
+.cg-fmt{
+  font-size:11px;color:var(--t3);border-top:1px solid #dce8f5;
+  padding-top:5px;margin-top:1px
+}
+.cg-fmt code{
+  font-family:var(--mono);font-size:11px;
+  background:#e4edf8;padding:1px 5px;border-radius:3px;color:#1a5c9e
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="hd">
+    <div class="hd-brand">
+      <span class="hd-title">StaffFlow 排班工具</span>
+      <span class="hd-pipe"></span>
+      <span class="hd-sub">深开项目排班预测</span>
+    </div>
+    <span class="hd-ver">v 1.0</span>
+  </header>
+
+  <div class="body">
+
+    <!-- TOP: MAIN OPERATION -->
+    <div class="top">
+      <div class="op-card">
+
+        <div class="file-row">
+          <!-- Input file -->
+          <div>
+            <div class="field-lbl"><span class="req">*</span> 输入文件</div>
+            <div class="fi-wrap">
+              <input class="fi-path" id="inPath" type="text"
+                value=""
+                placeholder="请选择 Excel 输入文件…" />
+              <button class="btn-brs" onclick="browseFile('in')">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 4a1 1 0 011-1h4l2 2h4a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"
+                    stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>浏览
+              </button>
+            </div>
+          </div>
+          <!-- Output dir -->
+          <div>
+            <div class="field-lbl">输出目录</div>
+            <div class="fi-wrap">
+              <input class="fi-path" id="outPath" type="text" placeholder="与输入文件同目录（默认）" />
+              <button class="btn-brs" onclick="browseFile('out')">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 4a1 1 0 011-1h4l2 2h4a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"
+                    stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>浏览
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="gen-area">
+          <button class="btn-gen" id="btnGen" onclick="doGenerate()">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+              <path d="M4 10h12M13 6l4 4-4 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            生成排班表
+          </button>
+
+          <div class="status-area">
+            <!-- idle -->
+            <div class="s-idle" id="sIdle">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M8 5v3.5l2 1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              就绪 — 请选择输入文件后点击生成
+            </div>
+            <!-- running -->
+            <div class="s-run" id="sRun">
+              <div class="prog-wrap"><div class="prog-fill" id="progFill"></div></div>
+              <div class="prog-log" id="progLog">正在初始化…</div>
+            </div>
+            <!-- success -->
+            <div class="s-ok" id="sOk">
+              <div class="ok-icon">✓</div>
+              <span>已生成：</span>
+              <span class="fname" id="outFname">排班预测_20260512_094241.xlsx</span>
+              <span class="ts">2026-05-12 09:42</span>
+            </div>
+            <div class="s-err" id="sErr">
+              <div class="err-icon">!</div>
+              <span id="errMsg">运行出错，请查看日志</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="div"></div>
+
+    <!-- BOTTOM: CONFIG -->
+    <div class="cfg">
+      <div class="cfg-hd">
+        <span class="cfg-title">配置管理</span>
+        <div class="cfg-line"></div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab-hds">
+          <button class="tab-btn on" onclick="switchTab(this,'run')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M8 5.5v2.5l1.5 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            运行配置
+            <span class="badge">每周更新</span>
+          </button>
+          <button class="tab-btn" onclick="switchTab(this,'cal')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            工作日历
+          </button>
+        </div>
+
+        <div class="tab-panels">
+
+          <!-- TAB 1: run_config -->
+          <div class="tab-pnl on" id="pnl-run">
+            <div class="hint">
+              <em class="hi">ⓘ</em>
+              每次运行前请确认排班起始日期 — 通常设为本周一对应的日期
+            </div>
+            <div class="cfg-form">
+              <div class="cfg-field">
+                <label>排班起始日期 <span style="color:var(--accent)">*</span></label>
+                <input class="cfg-in" type="text" value="2026.5.12" placeholder="例：2026.5.12" />
+                <span class="fhint">格式：YYYY.M.D — 本次排班的起始日期</span>
+              </div>
+              <div class="cfg-field">
+                <label>排班截止日期</label>
+                <input class="cfg-in" type="text" value="" placeholder="留空 = 自动推算" />
+                <span class="fhint">留空 = 自动推算至订单最晚结束月</span>
+              </div>
+            </div>
+            <div class="cfg-acts">
+              <button class="btn-save" onclick="saveRun()">保存配置</button>
+              <div class="sv-ok" id="svOk">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                已保存
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: calendar -->
+          <div class="tab-pnl" id="pnl-cal">
+            <div class="hint warn">
+              <em class="hi w">⚠</em>
+              此处管理节假日和补班日期，通常每年初更新一次，请谨慎修改
+            </div>
+            <div class="cal-guide">
+              <div class="cg-title">填写逻辑</div>
+              <div class="cg-rows">
+                <div class="cg-row">
+                  <span class="cg-key">work_days</span>
+                  <span class="cg-sep">→</span>
+                  <span class="cg-val">本月实际工作日总天数。普通月份为 22 天；调休月份按国家通知填写（如 10 月 = 18）</span>
+                </div>
+                <div class="cg-row">
+                  <span class="cg-key">holidays</span>
+                  <span class="cg-sep">→</span>
+                  <span class="cg-val">放假日期 — 原本是工作日，因节假日变成休息日（如五一、国庆、春节等）</span>
+                </div>
+                <div class="cg-row">
+                  <span class="cg-key">makeup_days</span>
+                  <span class="cg-sep">→</span>
+                  <span class="cg-val">补班日期 — 原本是周末，因调休需要上班（如节假日前后的补班安排）</span>
+                </div>
+              </div>
+              <div class="cg-fmt">日期格式统一为 <code>YYYY-MM-DD</code>，例如 <code>2026-10-01</code></div>
+            </div>
+            <div class="yaml-wrap">
+              <textarea class="yaml-ta" id="yamlTa" readonly>2026:
+  1:  { work_days: 21 }
+  2:  { work_days: 16, holidays: ["2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-21","2026-02-22"], makeup_days: ["2026-02-08","2026-02-22"] }
+  5:  { work_days: 19, holidays: ["2026-05-01","2026-05-04","2026-05-05"] }
+  9:  { work_days: 22, makeup_days: ["2026-09-27"] }
+  10: { work_days: 18, holidays: ["2026-10-01","2026-10-02","2026-10-03","2026-10-04","2026-10-05","2026-10-06","2026-10-07"], makeup_days: ["2026-09-27","2026-10-11"] }</textarea>
+              <div class="yaml-acts">
+                <button class="btn-edit" id="btnEdit" onclick="editYaml()">✏ 编辑</button>
+                <button class="btn-syaml on" id="btnSaveY" onclick="saveYaml()" style="display:none">保存</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+</div><!-- /app -->
+
+<script>
+// ── 状态 ────────────────────────────────────────────────
+let _pyReady   = false   // pywebview API 是否就绪
+let _genRunning = false  // 是否正在生成
+let _logCount  = 0       // 已收到的日志行数（用于估算进度条）
+
+// ── pywebview 就绪 ──────────────────────────────────────
+window.addEventListener('pywebviewready', function () {
+  _pyReady = true
+  _loadRunConfig()
+})
+
+// ── 启动时加载运行配置 ──────────────────────────────────
+function _loadRunConfig() {
+  window.pywebview.api.get_run_config().then(function (cfg) {
+    var inputs = document.querySelectorAll('#pnl-run .cfg-in')
+    inputs[0].value = cfg.start_date || ''
+    inputs[1].value = cfg.end_date   || ''
+  })
+}
+
+// ── 文件 / 目录浏览 ─────────────────────────────────────
+function browseFile(t) {
+  if (!_pyReady) {
+    // 浏览器预览模式：填入示例路径
+    if (t === 'in') document.getElementById('inPath').value =
+      'C:\\01_NanTian\\项目\\排班\\相关文件\\深开排班表生成模板v0.2.xlsx'
+    else document.getElementById('outPath').value =
+      'C:\\01_NanTian\\项目\\排班\\staffflow_engine\\data\\output'
+    return
+  }
+  if (t === 'in') {
+    window.pywebview.api.browse_file().then(function (path) {
+      if (path) document.getElementById('inPath').value = path
+    })
+  } else {
+    window.pywebview.api.browse_folder().then(function (path) {
+      if (path) document.getElementById('outPath').value = path
+    })
+  }
+}
+
+// ── 生成排班 ────────────────────────────────────────────
+function doGenerate() {
+  if (_genRunning) return
+  var inputPath = document.getElementById('inPath').value.trim()
+  if (!inputPath) { alert('请先选择输入文件'); return }
+
+  _genRunning = true
+  _logCount = 0
+  var btn = document.getElementById('btnGen')
+  btn.classList.add('running')
+  btn.innerHTML =
+    '<svg width="13" height="13" viewBox="0 0 20 20" fill="none"' +
+    ' style="animation:spin 1s linear infinite">' +
+    '<circle cx="10" cy="10" r="7" stroke="white" stroke-width="2.5" stroke-dasharray="22 22"/>' +
+    '</svg> 运行中…'
+
+  _setStatus('running')
+  _updateProg(5, '正在启动引擎…')
+
+  if (_pyReady) {
+    var outDir = document.getElementById('outPath').value.trim()
+    window.pywebview.api.generate(inputPath, outDir)
+  } else {
+    _mockGenerate()  // 浏览器预览模式
+  }
+}
+
+// ── Python 回调（由 gui.py evaluate_js 触发）───────────
+function onProgressLog(msg) {
+  _logCount++
+  var pct = Math.min(10 + _logCount * 9, 90)
+  _updateProg(pct, msg)
+}
+
+function onGenerateSuccess(fname, fullPath) {
+  _genRunning = false
+  _updateProg(100, '完成')
+  setTimeout(function () {
+    _setStatus('success', fname)
+    var btn = document.getElementById('btnGen')
+    btn.classList.remove('running')
+    btn.classList.add('done')
+    btn.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+      '<path d="M3 8l3.5 3.5L13 5" stroke="white" stroke-width="2"' +
+      ' stroke-linecap="round" stroke-linejoin="round"/></svg> 完成 — 再次生成'
+    btn.onclick = resetGen
+  }, 300)
+}
+
+function onGenerateError(msg) {
+  _genRunning = false
+  _setStatus('error', msg)
+  var btn = document.getElementById('btnGen')
+  btn.classList.remove('running', 'done')
+  btn.innerHTML =
+    '<svg width="15" height="15" viewBox="0 0 20 20" fill="none">' +
+    '<path d="M4 10h12M13 6l4 4-4 4" stroke="white" stroke-width="2"' +
+    ' stroke-linecap="round" stroke-linejoin="round"/></svg> 生成排班表'
+  btn.onclick = doGenerate
+}
+
+// ── 重置 ────────────────────────────────────────────────
+function resetGen() {
+  _genRunning = false
+  var btn = document.getElementById('btnGen')
+  btn.classList.remove('running', 'done')
+  btn.innerHTML =
+    '<svg width="15" height="15" viewBox="0 0 20 20" fill="none">' +
+    '<path d="M4 10h12M13 6l4 4-4 4" stroke="white" stroke-width="2"' +
+    ' stroke-linecap="round" stroke-linejoin="round"/></svg> 生成排班表'
+  btn.onclick = doGenerate
+  _setStatus('idle')
+  document.getElementById('progFill').style.width = '0%'
+}
+
+// ── 状态切换辅助 ────────────────────────────────────────
+function _setStatus(state, data) {
+  document.getElementById('sIdle').classList.toggle('hide', state !== 'idle')
+  document.getElementById('sRun').classList.toggle('on',  state === 'running')
+  document.getElementById('sOk').classList.toggle('on',   state === 'success')
+  document.getElementById('sErr').classList.toggle('on',  state === 'error')
+  if (state === 'success' && data) {
+    document.getElementById('outFname').textContent = data
+    var now = new Date()
+    document.querySelector('.s-ok .ts').textContent =
+      now.getFullYear() + '-' + _p(now.getMonth()+1) + '-' + _p(now.getDate()) +
+      ' ' + _p(now.getHours()) + ':' + _p(now.getMinutes())
+  }
+  if (state === 'error' && data) {
+    document.getElementById('errMsg').textContent = data
+  }
+}
+
+function _updateProg(pct, msg) {
+  document.getElementById('progFill').style.width = pct + '%'
+  document.getElementById('progLog').textContent = msg
+}
+
+function _p(n) { return String(n).padStart(2, '0') }
+
+// ── 保存运行配置 ────────────────────────────────────────
+function saveRun() {
+  var inputs = document.querySelectorAll('#pnl-run .cfg-in')
+  var startDate = inputs[0].value.trim()
+  var endDate   = inputs[1].value.trim()
+  if (_pyReady) {
+    window.pywebview.api.save_run_config(startDate, endDate).then(function () {
+      _showSaveOk()
+    })
+  } else {
+    _showSaveOk()
+  }
+}
+
+function _showSaveOk() {
+  var el = document.getElementById('svOk')
+  el.classList.add('on')
+  setTimeout(function () { el.classList.remove('on') }, 2000)
+}
+
+// ── 工作日历编辑 ────────────────────────────────────────
+function editYaml() {
+  if (_pyReady) {
+    window.pywebview.api.get_calendar().then(function (content) {
+      document.getElementById('yamlTa').value = content
+      _enableYamlEdit()
+    })
+  } else {
+    _enableYamlEdit()
+  }
+}
+
+function _enableYamlEdit() {
+  var ta = document.getElementById('yamlTa')
+  ta.removeAttribute('readonly')
+  ta.focus()
+  document.getElementById('btnEdit').style.display = 'none'
+  document.getElementById('btnSaveY').style.display = 'block'
+}
+
+function saveYaml() {
+  var content = document.getElementById('yamlTa').value
+  if (_pyReady) {
+    window.pywebview.api.save_calendar(content).then(function (ok) {
+      if (ok) _disableYamlEdit()
+    }).catch(function (e) {
+      alert('保存失败：YAML 格式有误，请检查后重试\n' + e)
+    })
+  } else {
+    _disableYamlEdit()
+  }
+}
+
+function _disableYamlEdit() {
+  var ta = document.getElementById('yamlTa')
+  ta.setAttribute('readonly', '')
+  document.getElementById('btnEdit').style.display = 'block'
+  document.getElementById('btnSaveY').style.display = 'none'
+}
+
+// ── Tab 切换 ────────────────────────────────────────────
+function switchTab(el, name) {
+  document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('on') })
+  document.querySelectorAll('.tab-pnl').forEach(function (p) { p.classList.remove('on') })
+  el.classList.add('on')
+  document.getElementById('pnl-' + name).classList.add('on')
+}
+
+// ── 浏览器预览模式模拟生成 ─────────────────────────────
+var _MOCK_LOGS = [
+  '加载输入文件…','解析订单清单（6 个订单）…','加载在岗人员（106 人）…',
+  '执行排班算法：2026.05 → 2027.03…','处理跨领域借还配置…',
+  '生成排班表与转场记录…','写入 Excel 输出文件…'
+]
+function _mockGenerate() {
+  var i = 0
+  var iv = setInterval(function () {
+    if (i < _MOCK_LOGS.length) onProgressLog(_MOCK_LOGS[i++])
+  }, 420)
+  setTimeout(function () {
+    clearInterval(iv)
+    onGenerateSuccess('排班预测_20260512_094241.xlsx', '')
+  }, 3200)
+}
+</script>
+</body>
+</html>
