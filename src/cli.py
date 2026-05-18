@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -87,9 +88,25 @@ def main(argv=None) -> int:
         rules_cfg = yaml.safe_load(f)
     rules = RulesConfig(rules_cfg)
 
+    # 起始日期：命令行 > run_config.yaml > 报错提示
+    raw_start = args.start_date or str(run_cfg.get("start_date") or "")
+    if not raw_start:
+        log.error(
+            "未指定排班起始日期。请在 config/run_config.yaml 中设置 start_date（格式 YYYY.M.D），"
+            "或通过 --start-date 参数传入。"
+        )
+        return 1
+    # data_date 保留完整日期（含日），用于借还拆分与输出列标题
+    # start_month 始终取当月1日，用于月度排班循环
+    data_date = _parse_date_str(raw_start)
+    start_month = date(data_date.year, data_date.month, 1)
+
+    raw_end = args.end_date or str(run_cfg.get("end_date") or "")
+    end_data_date: Optional[date] = _parse_date_str(raw_end) if raw_end else None
+
     log.info("Loading input: %s", args.input)
     try:
-        loaded = load_all(args.input, schema_path, calendar_path)
+        loaded = load_all(args.input, schema_path, calendar_path, data_date=data_date)
     except Exception as e:
         log.error("加载输入文件失败: %s", e)
         return 1
@@ -101,24 +118,14 @@ def main(argv=None) -> int:
         log.error("数据校验失败: %s", e)
         return 1
 
-    # 起始日期：命令行 > run_config.yaml > 报错提示
-    raw_start = args.start_date or str(run_cfg.get("start_date") or "")
-    if not raw_start:
-        log.error(
-            "未指定排班起始日期。请在 config/run_config.yaml 中设置 start_date（格式 YYYY.M.D），"
-            "或通过 --start-date 参数传入。"
-        )
-        return 1
-    # data_date 保留完整日期（含日），用于输出表格的列标题
-    # start_month 始终取当月1日，用于月度排班循环
-    data_date = _parse_date_str(raw_start)
-    start_month = date(data_date.year, data_date.month, 1)
+    if end_data_date:
+        end_month = date(end_data_date.year, end_data_date.month, 1)
+    else:
+        end_inferred = _infer_end_month(loaded.orders)
+        end_month = date(end_inferred.year, end_inferred.month, 1)
 
-    raw_end = args.end_date or str(run_cfg.get("end_date") or "")
-    end_month = _parse_date_str(raw_end) if raw_end else _infer_end_month(loaded.orders)
-    end_month = date(end_month.year, end_month.month, 1)
-
-    log.info("排班区间：%s ~ %s（数据基准日：%s）", start_month, end_month, data_date)
+    log.info("排班区间：%s ~ %s（数据基准日：%s，结束日：%s）",
+             start_month, end_month, data_date, end_data_date or "（自动推断）")
     result = run_scheduler(
         orders=loaded.orders,
         staff_pool=loaded.staff_pool,
@@ -128,6 +135,8 @@ def main(argv=None) -> int:
         start_month=start_month,
         end_month=end_month,
         loader_warnings=loaded.warnings,
+        data_date=data_date,
+        end_date=end_data_date,
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -135,7 +144,7 @@ def main(argv=None) -> int:
     out_path = os.path.join(args.output_dir, f"排班预测_{ts}.xlsx")
 
     export(result, rules, start_month, end_month, out_path, loaded.warnings,
-           loaded.calendar, data_date)
+           loaded.calendar, data_date, end_date=end_data_date)
     log.info("Done. Output: %s", out_path)
     print(f"输出文件：{out_path}")
     return 0

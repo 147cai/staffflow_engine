@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 from ..models import Month, Order, Staff
 from ..engine.rules import RulesConfig
 from ..engine.scheduler import ScheduleResult
-from ..utils import month_range
+from ..utils import month_range, window_range
 from ..reporter import order_summary, schedule_table, transfer_table, warnings as warn_mod
 from ..reporter.schedule_table import BORROW_MARKER
 
@@ -40,13 +40,19 @@ def export(
     loader_warnings: List[str],
     calendar=None,
     data_date=None,
+    end_date=None,
 ) -> str:
     months = month_range(start_month, end_month)
+    # 若 scheduler 已生成 windows 则复用，否则按 (data_date, end_date) 现场生成
+    windows = result.windows if result.windows else (
+        window_range(calendar, start_month, end_month, data_date, end_date)
+        if calendar is not None else None
+    )
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
     _write_order_summary(wb, result.orders, months, rules, data_date)
-    _write_schedule_table(wb, result.staff_pool, result.orders, months, calendar)
+    _write_schedule_table(wb, result.staff_pool, result.orders, windows)
     _write_transfer_table(wb, result.staff_pool)
     _write_warnings(wb, result.orders, result.staff_pool, rules, months,
                     loader_warnings, result.warnings)
@@ -82,9 +88,9 @@ def _write_order_summary(wb, orders: Dict[str, Order], months: List[Month],
 
 
 def _write_schedule_table(wb, staff_pool: Dict[str, Staff], orders: Dict[str, Order],
-                          months: List[Month], calendar=None) -> None:
+                          windows) -> None:
     ws = wb.create_sheet("最新排班表")
-    header, rows = schedule_table.build_rows(staff_pool, orders, months, calendar)
+    header, rows = schedule_table.build_rows(staff_pool, orders, windows)
     _write_sheet(ws, header, rows)
 
     # 处理借还行黄色字体 + 空行（BORROW_MARKER 已混入 staff_name 列）

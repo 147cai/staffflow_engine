@@ -508,7 +508,8 @@ function doGenerate() {
 
   if (_pyReady) {
     var outDir = document.getElementById('outPath').value.trim()
-    window.pywebview.api.generate(inputPath, outDir)
+    var startDate = document.querySelectorAll('#pnl-run .cfg-in')[0].value.trim()
+    window.pywebview.api.generate(inputPath, outDir, startDate)
   } else {
     _mockGenerate()  // 浏览器预览模式
   }

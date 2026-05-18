@@ -1,25 +1,22 @@
 """预算计算工具函数。"""
 from __future__ import annotations
-import calendar as _cal
 from datetime import date, timedelta
-from typing import Optional
 
-from ..models import Month, Order
+from ..models import MonthWindow, Order
 
 
-def compute_transfer_date(month: Month, days_worked_before: int,
-                          total_work_days: int) -> date:
+def compute_transfer_date(window: MonthWindow, days_worked_before: int,
+                          available_days: int) -> date:
+    """估算转场发生的日历日期。
+    按比例将"第 days_worked_before 个工作日"映射到窗口的自然日范围。
     """
-    估算转场发生的日历日期。
-    按比例将"第 days_worked_before 个工作日"映射到该月的日历天。
-    """
-    if total_work_days <= 0:
-        return month
-    _, days_in_month = _cal.monthrange(month.year, month.month)
-    fraction = min(days_worked_before / total_work_days, 1.0)
-    day_offset = max(round(fraction * days_in_month), 1)
-    day_offset = min(day_offset, days_in_month)
-    return date(month.year, month.month, day_offset)
+    if available_days <= 0:
+        return window.start
+    span = window.natural_span
+    fraction = min(days_worked_before / available_days, 1.0)
+    day_offset = max(round(fraction * span), 1)
+    day_offset = min(day_offset, span)
+    return window.start + timedelta(days=day_offset - 1)
 
 
 def max_schedulable_days(order: Order, level: str,

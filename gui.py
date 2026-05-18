@@ -47,11 +47,16 @@ class API:
 
     # ── 运行配置 ────────────────────────────────────────
     def get_run_config(self) -> dict:
+        from datetime import date as _date
         with open(RUN_CONFIG, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
+        start = str(data.get("start_date") or "").strip()
+        if not start:
+            today = _date.today()
+            start = f"{today.year}.{today.month}.{today.day}"
         return {
-            "start_date": str(data.get("start_date") or ""),
-            "end_date":   str(data.get("end_date")   or ""),
+            "start_date": start,
+            "end_date":   str(data.get("end_date") or ""),
         }
 
     def save_run_config(self, start_date: str, end_date: str) -> bool:
@@ -75,7 +80,7 @@ class API:
         return True
 
     # ── 生成排班 ────────────────────────────────────────
-    def generate(self, input_path: str, output_dir: str) -> bool:
+    def generate(self, input_path: str, output_dir: str, start_date: str = "") -> bool:
         """后台线程运行引擎，通过 JS 回调推送进度。立即返回 True。"""
 
         def run() -> None:
@@ -96,6 +101,8 @@ class API:
                     f' --output-dir "{out_dir}"'
                     f' --config-dir "{CONFIG_DIR}"'
                 )
+                if start_date and start_date.strip():
+                    cmd_str += f' --start-date "{start_date.strip()}"'
                 proc = subprocess.Popen(
                     cmd_str,
                     shell=True,

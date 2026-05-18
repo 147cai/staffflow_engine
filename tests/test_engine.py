@@ -7,7 +7,7 @@ from src.engine import borrow_handler, transfer_finder
 from src.engine.budget import compute_transfer_date, max_schedulable_days
 from src.engine.scheduler import run as run_scheduler
 from src.models import BorrowConfig, WorkCalendar
-from tests.conftest import make_order, make_staff, _DEFAULT_RULES
+from tests.conftest import make_order, make_staff, make_window, _DEFAULT_RULES
 from src.engine.rules import RulesConfig
 
 
@@ -79,14 +79,15 @@ class TestTransferFinder:
 
 
 class TestBorrowHandler:
-    def test_borrow_deducts_target_budget(self, rules):
+    def test_borrow_deducts_target_budget(self, rules, calendar):
         orders = {"F001": make_order("F001", domain="信贷", mid=5.0)}
         staff_pool = {"房改甲": make_staff("房改甲", domain="房改", order_no="F999")}
         month = date(2026, 5, 1)
+        window = make_window(calendar, month)
         borrows = [BorrowConfig(staff_name="房改甲", from_domain="房改",
                                 to_order_no="F001", month=month, days=11)]
         warnings = []
-        borrow_handler.apply_borrows(month, borrows, staff_pool, orders, rules, warnings)
+        borrow_handler.apply_borrows(window, borrows, staff_pool, orders, rules, warnings)
 
         assert orders["F001"].remaining["中级"] == pytest.approx(4.5)
         assert staff_pool["房改甲"].get_borrowed_days(month) == 11
@@ -95,34 +96,35 @@ class TestBorrowHandler:
         assert a.is_borrow is True
         assert a.days == 11
 
-    def test_borrow_warns_on_no_budget(self, rules):
+    def test_borrow_warns_on_no_budget(self, rules, calendar):
         orders = {"F001": make_order("F001", domain="信贷", mid=0.0)}
         orders["F001"].remaining = {"高级": 0.0, "中级": 0.0, "初级": 0.0}
         staff_pool = {"房改甲": make_staff("房改甲", domain="房改", order_no="F999")}
         month = date(2026, 5, 1)
+        window = make_window(calendar, month)
         borrows = [BorrowConfig(staff_name="房改甲", from_domain="房改",
                                 to_order_no="F001", month=month, days=5)]
         warnings = []
-        borrow_handler.apply_borrows(month, borrows, staff_pool, orders, rules, warnings)
+        borrow_handler.apply_borrows(window, borrows, staff_pool, orders, rules, warnings)
         assert len(warnings) == 1
         assert len(staff_pool["房改甲"].assignments) == 0
 
 
 class TestBudgetUtils:
-    def test_transfer_date_midmonth(self):
-        month = date(2026, 5, 1)
-        d = compute_transfer_date(month, 10, 20)   # 50% of 31 days = day 16
+    def test_transfer_date_midmonth(self, calendar):
+        w = make_window(calendar, date(2026, 5, 1))
+        d = compute_transfer_date(w, 10, 20)   # 50% of 31 days = day 16
         assert d == date(2026, 5, 16)
 
-    def test_transfer_date_full_month(self):
-        month = date(2026, 5, 1)
-        d = compute_transfer_date(month, 19, 19)   # 100% → last day
+    def test_transfer_date_full_month(self, calendar):
+        w = make_window(calendar, date(2026, 5, 1))
+        d = compute_transfer_date(w, 19, 19)   # 100% → last day
         assert d.month == 5
         assert d.day == 31
 
-    def test_transfer_date_start_of_month(self):
-        month = date(2026, 5, 1)
-        d = compute_transfer_date(month, 0, 19)    # 0% → day 1
+    def test_transfer_date_start_of_month(self, calendar):
+        w = make_window(calendar, date(2026, 5, 1))
+        d = compute_transfer_date(w, 0, 19)    # 0% → day 1
         assert d == date(2026, 5, 1)
 
     def test_max_days_basic(self):
@@ -253,3 +255,36 @@ class TestSchedulerIntegration:
         assert borrow_days == 9
         assert regular_days == 19 - 9   # 10天在原领域
         assert len(result.all_transfers) == 0
+
+    def test_data_date_truncates_first_month(self, rules, calendar):
+        """起排日截断首月：5.12 起排，5 月只排约 12 天（按 proportional 估算）。"""
+        orders = {"F001": make_order("F001", domain="信贷", mid=50.0)}
+        staff_pool = {"甲": make_staff("甲", domain="信贷", level="中级", order_no="F001")}
+        result = run_scheduler(
+            orders=orders, staff_pool=staff_pool, calendar=calendar,
+            borrow_configs=[], rules=rules,
+            start_month=date(2026, 5, 1), end_month=date(2026, 5, 1),
+            loader_warnings=[],
+            data_date=date(2026, 5, 12),
+        )
+        may_days = sum(a.days for a in result.all_assignments if a.month == date(2026, 5, 1))
+        assert may_days < 19   # 必小于整月19
+        assert may_days > 0
+        # 验证 windows 已正确生成且首月是 partial
+        assert result.windows[0].is_partial
+        assert result.windows[0].start == date(2026, 5, 12)
+
+    def test_end_date_truncates_last_month(self, rules, calendar):
+        """结束日截断末月：end_date 5.15 时，5 月只排约前半月。"""
+        orders = {"F001": make_order("F001", domain="信贷", mid=50.0)}
+        staff_pool = {"甲": make_staff("甲", domain="信贷", level="中级", order_no="F001")}
+        result = run_scheduler(
+            orders=orders, staff_pool=staff_pool, calendar=calendar,
+            borrow_configs=[], rules=rules,
+            start_month=date(2026, 5, 1), end_month=date(2026, 5, 1),
+            loader_warnings=[],
+            end_date=date(2026, 5, 15),
+        )
+        may_days = sum(a.days for a in result.all_assignments if a.month == date(2026, 5, 1))
+        assert may_days < 19
+        assert result.windows[0].end == date(2026, 5, 15)

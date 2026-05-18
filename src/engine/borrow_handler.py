@@ -3,23 +3,23 @@ from __future__ import annotations
 import logging
 from typing import Dict, List
 
-from ..models import Assignment, BorrowConfig, Month, Order, Staff
+from ..models import Assignment, BorrowConfig, MonthWindow, Order, Staff
 from .rules import RulesConfig
 
 log = logging.getLogger(__name__)
 
 
 def apply_borrows(
-    month: Month,
+    window: MonthWindow,
     borrows: List[BorrowConfig],
     staff_pool: Dict[str, Staff],
     orders: Dict[str, Order],
     rules: RulesConfig,
     warnings: List[str],
 ) -> None:
-    """处理该月所有借还配置，扣减借入订单预算，记录借出天数。"""
+    """处理该窗口对应月份的所有借还配置，扣减借入订单预算，记录借出天数。"""
     for b in borrows:
-        if b.month != month:
+        if b.month != window.month:
             continue
         staff = staff_pool.get(b.staff_name)
         order = orders.get(b.to_order_no)

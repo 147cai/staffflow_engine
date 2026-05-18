@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import openpyxl
@@ -23,7 +23,8 @@ class LoadResult:
     warnings: List[str] = field(default_factory=list)
 
 
-def load_all(excel_path: str, schema_path: str, calendar_path: str) -> LoadResult:
+def load_all(excel_path: str, schema_path: str, calendar_path: str,
+             data_date: Optional[date] = None) -> LoadResult:
     schema = _load_yaml(schema_path)
     cal = _load_calendar(calendar_path)
     level_map = schema.get("level_map", {})
@@ -36,7 +37,8 @@ def load_all(excel_path: str, schema_path: str, calendar_path: str) -> LoadResul
     staff_pool = _load_staff_pool(wb, schema["staff_pool"], warnings)
     _load_initial_assignments(wb, schema["initial_assignments"], staff_pool, orders, level_map, warnings)
     _load_whitelists(wb, schema["whitelist"], orders, staff_pool, level_map, warnings)
-    borrows = _load_borrow_config(wb, schema["borrow_config"], orders, staff_pool, cal, warnings)
+    borrows = _load_borrow_config(wb, schema["borrow_config"], orders, staff_pool,
+                                  cal, warnings, data_date=data_date)
 
     wb.close()
     return LoadResult(orders=orders, staff_pool=staff_pool, calendar=cal,
@@ -216,6 +218,15 @@ def _load_workload(wb, cfg: dict, orders: Dict[str, Order],
             for lvl in order.initial_budget
         }
 
+    # 检查进行中订单是否有工作量数据，无数据时 consumed_before 默认为0，结果会严重偏高
+    for order in orders.values():
+        if order.status == "进行中" and not order.consumed_before:
+            warnings.append(
+                f"[订单当前工作量] ⚠ 进行中订单 {order.no}（{order.name}）"
+                f" 在「订单当前工作量」Sheet中无任何数据，"
+                f" consumed_before 默认为0，剩余预算将被高估，请补录该订单的有效在岗人月"
+            )
+
 
 def _load_staff_pool(wb, cfg: dict, warnings: List[str]) -> Dict[str, Staff]:
     ws = wb[cfg["name"]]
@@ -311,13 +322,19 @@ def _load_whitelists(wb, cfg: dict, orders: Dict[str, Order],
 
 def _load_borrow_config(wb, cfg: dict, orders: Dict[str, Order],
                         staff_pool: Dict[str, Staff], calendar: WorkCalendar,
-                        warnings: List[str]) -> List[BorrowConfig]:
+                        warnings: List[str],
+                        data_date: Optional[date] = None) -> List[BorrowConfig]:
+    """按月拆分借还配置。
+    若提供 data_date：起始月早于 data_date 月份时，自动扣除已发生天数，从 data_date
+    所在月开始按截断窗口（data_date 至月末）拆分；剩余溢出到次月。
+    """
     if cfg["name"] not in wb.sheetnames:
         return []
     ws = wb[cfg["name"]]
     col = _build_col_map(ws, cfg["header_rows"])
     c = cfg["columns"]
     results: List[BorrowConfig] = []
+    data_month = date(data_date.year, data_date.month, 1) if data_date else None
 
     for row in ws.iter_rows(min_row=cfg["data_start_row"], values_only=True):
         name = _str(_get(row, col, c["name"]))
@@ -351,11 +368,30 @@ def _load_borrow_config(wb, cfg: dict, orders: Dict[str, Order],
             warnings.append(f"[借还配置] {name} 不在人员池，已跳过")
             continue
 
-        # Split across consecutive months if days exceeds one month's work days
-        current_month = month
+        # 若 data_date 落在配置起始月之后，先扣除"已发生"的工作日（视为历史，
+        # 已含在 consumed_before 中），剩余天数从 data_date 所在月开始重新拆分
         remaining = days
+        start_alloc_month = month
+        if data_date and data_month and data_month >= month and data_date > month:
+            elapsed = calendar.get_working_days_in_range(
+                month, data_date - timedelta(days=1))
+            if elapsed >= days:
+                warnings.append(
+                    f"[借还配置] {name} 配置 {days}天 从 {month} 起，"
+                    f"在起排日 {data_date} 前已发生 {elapsed} 天，整条已是历史，跳过")
+                continue
+            remaining = days - elapsed
+            start_alloc_month = data_month
+
+        # Split across consecutive months from start_alloc_month
+        current_month = start_alloc_month
         while remaining > 0:
-            month_days = calendar.get_working_days(current_month)
+            # 首月若被 data_date 截断，用截断窗口的工作日数
+            if data_date and current_month == data_month:
+                month_days = calendar.get_working_days_in_range(
+                    data_date, calendar.month_end(current_month))
+            else:
+                month_days = calendar.get_working_days(current_month)
             if month_days <= 0:
                 warnings.append(
                     f"[借还配置] {name} {current_month} 日历中无工作日数据，借还截止（剩余 {remaining} 天未安排）")

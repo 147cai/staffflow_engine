@@ -1,9 +1,29 @@
 from __future__ import annotations
 import calendar as _cal
 from datetime import date, timedelta
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 from pydantic import BaseModel, Field
 from .assignment import Month
+
+
+class MonthWindow(BaseModel):
+    """月度排班窗口：可能是整月，也可能因起排日/结束日而被截断。"""
+    model_config = {"frozen": True, "arbitrary_types_allowed": True}
+
+    month: Month                # 月份键（当月1日）
+    start: date                 # 窗口实际起始日（含）
+    end: date                   # 窗口实际结束日（含）
+    work_days: int              # 该窗口内工作日数
+    total_month_days: int       # 月历完整工作日数（用于显示分母）
+
+    @property
+    def is_partial(self) -> bool:
+        return self.work_days != self.total_month_days
+
+    @property
+    def natural_span(self) -> int:
+        """窗口自然日跨度（含首尾）。"""
+        return (self.end - self.start).days + 1
 
 
 class WorkCalendar(BaseModel):
@@ -25,6 +45,35 @@ class WorkCalendar(BaseModel):
         if self.holidays or self.makeup_days:
             return self._count_exact(start, end)
         return self._count_proportional(start, end)
+
+    def window_for(self, month: Month,
+                   data_date: Optional[date] = None,
+                   end_date: Optional[date] = None) -> MonthWindow:
+        """生成该月的排班窗口：
+        - data_date 落在 month 内时，窗口起始截断为 data_date
+        - end_date  落在 month 内时，窗口结束截断为 end_date
+        - 整月情况下直接使用 calendar.yaml 配置的月工作日数
+        """
+        month_start = month
+        month_last = self.month_end(month)
+        total = self.work_days.get(month, 0)
+
+        start = month_start
+        end = month_last
+        if data_date and data_date.year == month.year and data_date.month == month.month:
+            if data_date > month_start:
+                start = data_date
+        if end_date and end_date.year == month.year and end_date.month == month.month:
+            if end_date < month_last:
+                end = end_date
+
+        if start == month_start and end == month_last:
+            work_days = total
+        else:
+            work_days = self.get_working_days_in_range(start, end)
+
+        return MonthWindow(month=month, start=start, end=end,
+                           work_days=work_days, total_month_days=total)
 
     def _count_exact(self, start: date, end: date) -> int:
         """逐日精确计算工作日：跳过周末和节假日，补班日计入。"""

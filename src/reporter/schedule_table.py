@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
-from ..models import Assignment, Month, Order, Staff
+from ..models import Assignment, Month, MonthWindow, Order, Staff
 
 # 标记借还行的哨兵值（exporter 据此设黄色字体）
 BORROW_MARKER = "__BORROW__"
@@ -22,22 +22,26 @@ def _level_priority(level_str: str) -> int:
     return 99
 
 
+def _month_header(w: MonthWindow) -> str:
+    """部分月显示 "5月（14/19）"，整月显示 "5月（22）"。"""
+    if w.is_partial:
+        return f"{w.month.month}月（{w.work_days}/{w.total_month_days}）"
+    return f"{w.month.month}月（{w.work_days}）"
+
+
 def build_rows(
     staff_pool: Dict[str, Staff],
     orders: Dict[str, Order],
-    months: List[Month],
-    calendar=None,
+    windows: List[MonthWindow],
 ) -> Tuple[List[str], List[list]]:
     """
     返回 (header, rows)。
     借还行的 staff_name 列以 BORROW_MARKER 为前缀，供 exporter 识别并设黄色字体。
     每两个订单组之间插入一行 None（空行）。
-    calendar: 若传入，月份标题显示工作日数，如"4月（21）"。
+    windows: 月度窗口列表，部分月在表头显示 "5月（14/19）"。
     """
-    if calendar is not None:
-        month_headers = [f"{m.month}月（{calendar.get_working_days(m)}）" for m in months]
-    else:
-        month_headers = [f"{m.month}月" for m in months]
+    months: List[Month] = [w.month for w in windows]
+    month_headers = [_month_header(w) for w in windows]
     header = ["订单编号", "姓名", "级别"] + month_headers
 
     # {order_no: [(staff_name, level, {month: days}, is_borrow, effective_level), ...]}

@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import date
 import pytest
 
-from src.models import Order, Staff
-from tests.conftest import make_order, make_staff
+from src.models import Order, Staff, WorkCalendar
+from tests.conftest import make_order, make_staff, make_window
 
 
 class TestOrderBudget:
@@ -99,19 +99,22 @@ class TestStaffAvailability:
 
     def test_get_available_days_full_month(self, calendar):
         s = make_staff("甲", entry=date(2026, 1, 1))
-        days = s.get_available_days(date(2026, 5, 1), 19, calendar)
+        w = make_window(calendar, date(2026, 5, 1))
+        days = s.get_available_days(w, calendar)
         assert days == 19
 
     def test_get_available_days_partial_entry(self, calendar):
         # 5月17日进场，5月有19个工作日，共31天，后15天
         s = make_staff("甲", entry=date(2026, 5, 17))
-        days = s.get_available_days(date(2026, 5, 1), 19, calendar)
+        w = make_window(calendar, date(2026, 5, 1))
+        days = s.get_available_days(w, calendar)
         assert days > 0
         assert days < 19
 
     def test_get_available_days_partial_exit(self, calendar):
         s = make_staff("甲", entry=date(2026, 1, 1), exit_=date(2026, 5, 10))
-        days = s.get_available_days(date(2026, 5, 1), 19, calendar)
+        w = make_window(calendar, date(2026, 5, 1))
+        days = s.get_available_days(w, calendar)
         assert 0 < days < 19
 
     def test_borrowed_days_tracking(self):
@@ -122,3 +125,48 @@ class TestStaffAvailability:
         assert s.get_borrowed_days(month) == 5
         s.set_borrowed_days(month, 3)
         assert s.get_borrowed_days(month) == 8   # 累加
+
+
+class TestMonthWindow:
+    """MonthWindow 与 window_for 截断逻辑测试。"""
+
+    def test_full_month_window(self, calendar):
+        w = calendar.window_for(date(2026, 5, 1))
+        assert w.start == date(2026, 5, 1)
+        assert w.end == date(2026, 5, 31)
+        assert w.work_days == 19
+        assert w.total_month_days == 19
+        assert not w.is_partial
+
+    def test_start_truncated_by_data_date(self, calendar):
+        # 5.12 起排，按 proportional 估算（conftest calendar 无 holidays）
+        w = calendar.window_for(date(2026, 5, 1), data_date=date(2026, 5, 12))
+        assert w.start == date(2026, 5, 12)
+        assert w.end == date(2026, 5, 31)
+        assert w.work_days < 19
+        assert w.total_month_days == 19
+        assert w.is_partial
+
+    def test_end_truncated_by_end_date(self, calendar):
+        w = calendar.window_for(date(2026, 5, 1), end_date=date(2026, 5, 15))
+        assert w.start == date(2026, 5, 1)
+        assert w.end == date(2026, 5, 15)
+        assert w.work_days < 19
+        assert w.is_partial
+
+    def test_data_date_in_other_month_no_truncation(self, calendar):
+        # data_date 在 4 月，对 5 月窗口无影响
+        w = calendar.window_for(date(2026, 5, 1), data_date=date(2026, 4, 20))
+        assert w.start == date(2026, 5, 1)
+        assert w.work_days == 19
+        assert not w.is_partial
+
+    def test_window_for_exact_calendar(self):
+        # 用真实节假日配置验证 5.12 起排首月 = 14 个工作日
+        cal = WorkCalendar(
+            work_days={date(2026, 5, 1): 19},
+            holidays={date(2026, 5, 1), date(2026, 5, 4), date(2026, 5, 5)},
+        )
+        w = cal.window_for(date(2026, 5, 1), data_date=date(2026, 5, 12))
+        assert w.work_days == 14   # 5.12 周二起：5.12-15 + 5.18-22 + 5.25-29 = 14
+        assert w.total_month_days == 19

@@ -5,7 +5,7 @@ import pytest
 import yaml
 
 from src.engine.rules import RulesConfig
-from src.models import BorrowConfig, Order, Staff, WorkCalendar
+from src.models import BorrowConfig, MonthWindow, Order, Staff, WorkCalendar
 from src.utils import month_range
 
 _DEFAULT_RULES = {
@@ -52,3 +52,9 @@ def make_staff(name: str, domain: str = "信贷", level: str = "中级",
               initial_level=level, current_level=level,
               entry_date=entry, exit_date=exit_)
     return s
+
+
+def make_window(calendar: WorkCalendar, month: date,
+                data_date: date = None, end_date: date = None) -> MonthWindow:
+    """便捷生成 MonthWindow（测试用）。"""
+    return calendar.window_for(month, data_date, end_date)

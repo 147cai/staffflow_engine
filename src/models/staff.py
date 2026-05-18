@@ -3,6 +3,7 @@ from datetime import date
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from .assignment import Assignment, Month, TransferRecord
+from .calendar import MonthWindow
 
 
 class Staff(BaseModel):
@@ -34,19 +35,18 @@ class Staff(BaseModel):
             return False
         return True
 
-    def get_available_days(self, month: Month, total_work_days: int, calendar) -> int:
-        month_start = month
-        month_end = date(month.year, month.month, _last_day(month))
-        eff_start = month_start
-        eff_end = month_end
-        if self.entry_date and self.entry_date > month_start:
+    def get_available_days(self, window: MonthWindow, calendar) -> int:
+        """以排班窗口（可能是部分月）为基准，取与入/离场日期的交集。"""
+        eff_start = window.start
+        eff_end = window.end
+        if self.entry_date and self.entry_date > eff_start:
             eff_start = self.entry_date
-        if self.exit_date and self.exit_date < month_end:
+        if self.exit_date and self.exit_date < eff_end:
             eff_end = self.exit_date
         if eff_start > eff_end:
             return 0
-        if eff_start == month_start and eff_end == month_end:
-            return total_work_days
+        if eff_start == window.start and eff_end == window.end:
+            return window.work_days
         return calendar.get_working_days_in_range(eff_start, eff_end)
 
     def get_borrowed_days(self, month: Month) -> int:

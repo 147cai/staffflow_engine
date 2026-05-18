@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Dict, List, Optional
 
-from ..models import Assignment, BorrowConfig, Month, Order, Staff, TransferRecord, WorkCalendar
-from ..utils import month_range
+from ..models import (Assignment, BorrowConfig, Month, MonthWindow, Order,
+                      Staff, TransferRecord, WorkCalendar)
+from ..utils import window_range
 from .borrow_handler import apply_borrows
 from .budget import compute_transfer_date, max_schedulable_days
 from .rules import RulesConfig
@@ -20,6 +21,7 @@ class ScheduleResult:
     orders: Dict[str, Order]
     staff_pool: Dict[str, Staff]
     warnings: List[str] = field(default_factory=list)
+    windows: List[MonthWindow] = field(default_factory=list)
 
     @property
     def all_assignments(self) -> List[Assignment]:
@@ -39,33 +41,36 @@ def run(
     start_month: Month,
     end_month: Month,
     loader_warnings: List[str],
+    data_date: Optional[date] = None,
+    end_date: Optional[date] = None,
 ) -> ScheduleResult:
+    windows = window_range(calendar, start_month, end_month, data_date, end_date)
     result = ScheduleResult(orders=orders, staff_pool=staff_pool,
-                            warnings=list(loader_warnings))
-    months = month_range(start_month, end_month)
+                            warnings=list(loader_warnings), windows=windows)
 
-    for month in months:
-        total_work_days = calendar.get_working_days(month)
-        log.info("Scheduling month %s (%d work days)", month, total_work_days)
+    for window in windows:
+        log.info("Scheduling month %s window %s~%s (%d work days, total %d)",
+                 window.month, window.start, window.end,
+                 window.work_days, window.total_month_days)
 
-        apply_borrows(month, borrow_configs, staff_pool, orders, rules, result.warnings)
+        apply_borrows(window, borrow_configs, staff_pool, orders, rules, result.warnings)
 
         for staff in sorted(staff_pool.values(), key=lambda s: s.name):
-            if not staff.is_active(month):
+            if not staff.is_active(window.month):
                 continue
-            _schedule_staff_month(staff, month, total_work_days, orders,
-                                  calendar, rules, result.warnings)
+            _schedule_staff_month(staff, window, orders, calendar, rules, result.warnings)
 
     _collect_idle_warnings(staff_pool, result.warnings)
     return result
 
 
 def _schedule_staff_month(
-    staff: Staff, month: Month, total_work_days: int,
+    staff: Staff, window: MonthWindow,
     orders: Dict[str, Order], calendar: WorkCalendar,
     rules: RulesConfig, warnings: List[str],
 ) -> None:
-    available = staff.get_available_days(month, total_work_days, calendar)
+    month = window.month
+    available = staff.get_available_days(window, calendar)
     available -= staff.get_borrowed_days(month)
     if available <= 0:
         return
@@ -100,7 +105,7 @@ def _schedule_staff_month(
         return
 
     # 当前订单预算耗尽或无订单，需转场
-    transfer_date = compute_transfer_date(month, days_placed, available)
+    transfer_date = compute_transfer_date(window, days_placed, available)
     exclude = current_no
     target = find_target(staff, month, orders, rules, exclude_order=exclude)
 

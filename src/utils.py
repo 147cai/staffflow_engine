@@ -2,9 +2,10 @@
 from __future__ import annotations
 import calendar as _cal
 from datetime import date, timedelta
-from typing import List
+from typing import List, Optional
 
 from .models.assignment import Month
+from .models.calendar import MonthWindow, WorkCalendar
 
 
 def month_range(start: Month, end: Month) -> List[Month]:
@@ -17,6 +18,18 @@ def month_range(start: Month, end: Month) -> List[Month]:
         nxt = date(cur.year, cur.month, last) + timedelta(days=1)
         cur = date(nxt.year, nxt.month, 1)
     return months
+
+
+def window_range(calendar: WorkCalendar,
+                 start_month: Month,
+                 end_month: Month,
+                 data_date: Optional[date] = None,
+                 end_date: Optional[date] = None) -> List[MonthWindow]:
+    """生成 start_month..end_month（含）的 MonthWindow 列表。
+    首月若被 data_date 截断、末月若被 end_date 截断，会在 window_for 中体现。
+    """
+    return [calendar.window_for(m, data_date, end_date)
+            for m in month_range(start_month, end_month)]
 
 
 def month_label(month: Month) -> str:
