@@ -1,5 +1,5 @@
-# 生成的输出文件
-data/output/
+# 输入输出数据（不上传到 GitHub）
+data/
 logs/
 
 # Excel 临时文件
